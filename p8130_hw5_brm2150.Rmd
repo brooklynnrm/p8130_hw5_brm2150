@@ -4,8 +4,10 @@ author: "Brooklynn McNeil"
 date: "2024-12-03"
 output: html_document
 ---
+
 ```{r setup, include=FALSE}
 library(tidyverse)
+library(faraway) 
 
 knitr::opts_chunk$set(
   comment = '', fig.width = 8, fig.height = 6, out.width = "90%"
@@ -21,3 +23,70 @@ options(
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
+
+R dataset state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict ‘life expectancy’ using a combination of remaining variables.
+
+Load Data
+
+```{r load data}
+data = datasets::state.x77 |>
+  as.tibble() |>
+  janitor::clean_names()
+```
+
+A)  Provide descriptive statistics for all of the variables of interest. Include continuous and categorical variables. The outcome we are interested in is life expectancy. The continuous variablest hat we want to look at for predictors are: population size, income, illiteracy rates, murder rates, high school graduation rates, frost days and area size. All of the variables we are looking at are continuous.
+
+```{r descriptive stat summary}
+data |>
+  summary() |>
+  knitr::kable()
+  
+```
+
+```{r}
+# basic histograms for all continuous variables
+
+data |>
+  ggplot(aes(x = population)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = income)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = illiteracy)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = murder)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = hs_grad)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = frost)) +
+  geom_histogram()
+
+data |>
+  ggplot(aes(x = area)) +
+  geom_histogram()
+
+# histogram of outcome
+
+data |>
+ ggplot(aes(x = life_exp)) +
+  geom_histogram()
+
+data |>
+ mutate(log_life_exp = log(life_exp)) |>
+ ggplot(aes(x = log_life_exp)) +
+ geom_histogram()
+
+qqnorm(data$life_exp)
+qqnorm(data$life_exp)
+```
+
+B)  
