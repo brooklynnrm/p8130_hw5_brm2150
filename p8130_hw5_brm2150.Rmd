@@ -8,6 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(faraway) 
+library(caret)
 
 knitr::opts_chunk$set(
   comment = '', fig.width = 8, fig.height = 6, out.width = "90%"
@@ -24,9 +25,13 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
 
-R dataset state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict ‘life expectancy’ using a combination of remaining variables.
+1.  
 
-Load Data
+<!-- -->
+
+A)  R data set state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict ‘life expectancy’ using a combination of remaining variables.The data has the outcome variable `life_exp` and the predictor variables `population`, `income`, `illiteracy`, `murder`, `hs_grad`, `frost`, and `area`. All of the predcitors we have are continuous variables.
+
+    Load Data
 
 ```{r load data}
 data = datasets::state.x77 |>
@@ -34,7 +39,7 @@ data = datasets::state.x77 |>
   janitor::clean_names()
 ```
 
-A)  Provide descriptive statistics for all of the variables of interest. Include continuous and categorical variables. The outcome we are interested in is life expectancy. The continuous variablest hat we want to look at for predictors are: population size, income, illiteracy rates, murder rates, high school graduation rates, frost days and area size. All of the variables we are looking at are continuous.
+Let's take a look at the summary of our predictors of interest.
 
 ```{r descriptive stat summary}
 data |>
@@ -42,6 +47,8 @@ data |>
   knitr::kable()
   
 ```
+
+B. Exploratory analysis
 
 ```{r}
 # basic histograms for all continuous variables
@@ -85,8 +92,108 @@ data |>
  ggplot(aes(x = log_life_exp)) +
  geom_histogram()
 
-qqnorm(data$life_exp)
-qqnorm(data$life_exp)
+qqnorm(data$life_exp) # identitiy
+qqnorm(log(data$life_exp)) # log
+qqnorm(sqrt(data$life_exp)) # square root
+qqnorm(1/(data$life_exp)) # inverse
+qqnorm(exp(data$life_exp))
+
+BoxCoxTrans(data$life_exp)
+## other plots comparing the predictors to out
+
+x = data |>
+  select(-life_exp) |>
+  colnames() |>
+  list()
+for (i in x) {
+  data |>
+  ggplot(aes(x = i, y = life_exp)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+}
+data |>
+  ggplot(aes(x = frost, y = life_exp)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
 ```
 
-B)  
+Let's look at correlation of the predictors to make sure there isn't collinearity that's obvious at the start.
+
+```{r}
+data |>
+  select(-life_exp) |>
+  pairs()
+```
+
+C. Use automatic procedures to find a ‘best subset’ of the full model. Backward selection, forward selection, stepwise. It doesn't look like there is any obvious highly correlated variables, so we don't need to remove anything at this point. It looks like the forward and backward step approaches led to the same model with final predictors as `population`, `murder`, `hs_grad`, and `frost`.
+
+```{r}
+# backward selection
+fit.mult = lm(life_exp~ ., data = data)
+summary(fit.mult)
+
+fit.back = step(fit.mult, direction = 'backward', trace = FALSE)
+summary(fit.back)
+
+# forward selection
+
+intercept_only = lm (life_exp ~ 1, data = data, trace = FALSE)
+fit.forward = step(intercept_only, direction = "forward", scope = formula(fit.mult), trace = FALSE)
+summary(fit.forward)
+
+# stepwise
+```
+
+The `population` variable is a close call variable because the p value is between 0.05 and 0.1. So, let's remove it and refit the model. Removing `population` reduced the Adjusted R-squared value, therefore reducing the performance of the model. So we will keep it.
+
+```{r}
+fit.3 = lm(life_exp ~ murder + hs_grad + frost, 
+    data = data, trace = FALSE)
+summary(fit.3)
+```
+
+Let's add an interaction variable between `illiteracy` and `hs_grad` to see if there is an interacting effect there. The interaction term is not significant with a p value of 0.4072 and the addition of the interaction didn't increased the Adjusted R-squared value, so we will not include it.
+
+```{r}
+best_fit_3 = lm(life_exp ~ murder + hs_grad + frost + population + illiteracy + hs_grad * illiteracy, data = data)
+summary(best_fit_3)
+```
+
+D. Use criterion-based procedures to guide your selection of the ‘best subset’. Summarize\
+your results (tabular or graphical).
+
+```{r}
+fit.4 = MASS::stepAIC(fit.mult, trace = FALSE)
+summary(fit.4)
+broom::tidy(fit.4) |> knitr::kable()
+```
+
+E. Use the LASSO method to perform variable selection. Make sure you choose the “best\
+lambda” to use and show how you determined this. It looks like this model has also dropped `income`, `illiteracy` and `area` from the model, which is the same as the stepAIC results.
+
+```{r}
+library(glmnet)
+
+y = data |> pull(life_exp)
+
+x = data |> select(-life_exp) |>as.matrix()
+  
+# find optimal lambda value
+
+cv_model = cv.glmnet(x, y, alpha = 1)
+
+best_lambda = cv_model$lambda.min
+
+# plot the CV results
+  tibble(lambda = cv_model$lambda,
+         mean_cv_error = cv_model$cvm) |>
+    ggplot(aes(x = lambda, y = mean_cv_error)) +
+    geom_point()
+
+# create best model with best lambda
+
+best_model = glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(best_model)
+
+```
