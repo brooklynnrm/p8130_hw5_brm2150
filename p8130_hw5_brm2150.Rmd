@@ -2,7 +2,7 @@
 title: "p8130_hw5_brm2150"
 author: "Brooklynn McNeil"
 date: "2024-12-03"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -25,11 +25,8 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
 
-1.  
-
-<!-- -->
-
-A)  R data set state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict ‘life expectancy’ using a combination of remaining variables.The data has the outcome variable `life_exp` and the predictor variables `population`, `income`, `illiteracy`, `murder`, `hs_grad`, `frost`, and `area`. All of the predcitors we have are continuous variables.
+## A.
+R data set state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict ‘life expectancy’ using a combination of remaining variables.The data has the outcome variable `life_exp` and the predictor variables `population`, `income`, `illiteracy`, `murder`, `hs_grad`, `frost`, and `area`. All of the predcitors we have are continuous variables.
 
     Load Data
 
@@ -48,74 +45,28 @@ data |>
   
 ```
 
-B. Exploratory analysis
+## B. Exploratory analysis
 
 ```{r}
-# basic histograms for all continuous variables
+# basic histograms for potentially not normal continuous variables
 
 data |>
   ggplot(aes(x = population)) +
-  geom_histogram()
+  geom_boxplot()
 
-data |>
-  ggplot(aes(x = income)) +
-  geom_histogram()
-
-data |>
-  ggplot(aes(x = illiteracy)) +
-  geom_histogram()
-
-data |>
-  ggplot(aes(x = murder)) +
-  geom_histogram()
-
-data |>
-  ggplot(aes(x = hs_grad)) +
-  geom_histogram()
-
-data |>
-  ggplot(aes(x = frost)) +
-  geom_histogram()
+qqnorm(log(data$population))
 
 data |>
   ggplot(aes(x = area)) +
-  geom_histogram()
+  geom_boxplot()
 
-# histogram of outcome
+qqnorm(log(data$area))
 
-data |>
- ggplot(aes(x = life_exp)) +
-  geom_histogram()
-
-data |>
- mutate(log_life_exp = log(life_exp)) |>
- ggplot(aes(x = log_life_exp)) +
- geom_histogram()
-
-qqnorm(data$life_exp) # identitiy
-qqnorm(log(data$life_exp)) # log
-qqnorm(sqrt(data$life_exp)) # square root
-qqnorm(1/(data$life_exp)) # inverse
-qqnorm(exp(data$life_exp))
-
-BoxCoxTrans(data$life_exp)
-## other plots comparing the predictors to out
-
-x = data |>
-  select(-life_exp) |>
-  colnames() |>
-  list()
-for (i in x) {
-  data |>
-  ggplot(aes(x = i, y = life_exp)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-}
-data |>
-  ggplot(aes(x = frost, y = life_exp)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
+# check for transformations of the outcome
+qqnorm(data$life_exp,main = paste("QQ Plot for", "life_exp")) # identitiy
+qqnorm(log(data$life_exp), main = paste("QQ Plot for", "log(life_exp)")) # log
+qqnorm(sqrt(data$life_exp), main = paste("QQ Plot for", "sqrt(life_exp)")) # square root
+qqnorm(1/(data$life_exp), main = paste("QQ Plot for", "inverse_life_exp")) # inverse
 ```
 
 Let's look at correlation of the predictors to make sure there isn't collinearity that's obvious at the start.
@@ -126,11 +77,12 @@ data |>
   pairs()
 ```
 
-C. Use automatic procedures to find a ‘best subset’ of the full model. Backward selection, forward selection, stepwise. It doesn't look like there is any obvious highly correlated variables, so we don't need to remove anything at this point. It looks like the forward and backward step approaches led to the same model with final predictors as `population`, `murder`, `hs_grad`, and `frost`.
+## C. 
+Use automatic procedures to find a ‘best subset’ of the full model. Backward selection, forward selection, stepwise. It doesn't look like there is any obvious highly correlated variables, so we don't need to remove anything at this point. It looks like the forward and backward step approaches led to the same model with final predictors as `population`, `murder`, `hs_grad`, and `frost`.
 
 ```{r}
 # backward selection
-fit.mult = lm(life_exp~ ., data = data)
+fit.mult = lm(life_exp ~ log(population) + income + illiteracy + murder + hs_grad + frost + log(area), data = data)
 summary(fit.mult)
 
 fit.back = step(fit.mult, direction = 'backward', trace = FALSE)
@@ -145,10 +97,10 @@ summary(fit.forward)
 # stepwise
 ```
 
-The `population` variable is a close call variable because the p value is between 0.05 and 0.1. So, let's remove it and refit the model. Removing `population` reduced the Adjusted R-squared value, therefore reducing the performance of the model. So we will keep it.
+The `log(population)`  and `frost` variables are close call variables. So, let's remove therm and refit the model. Removing the variables reduced the Adjusted R-squared value, therefore reducing the performance of the model. So we will keep them
 
 ```{r}
-fit.3 = lm(life_exp ~ murder + hs_grad + frost, 
+fit.3 = lm(life_exp ~ murder + hs_grad, 
     data = data, trace = FALSE)
 summary(fit.3)
 ```
@@ -156,17 +108,17 @@ summary(fit.3)
 Let's add an interaction variable between `illiteracy` and `hs_grad` to see if there is an interacting effect there. The interaction term is not significant with a p value of 0.4072 and the addition of the interaction didn't increased the Adjusted R-squared value, so we will not include it.
 
 ```{r}
-best_fit_3 = lm(life_exp ~ murder + hs_grad + frost + population + illiteracy + hs_grad * illiteracy, data = data)
-summary(best_fit_3)
+fit.4 = lm(life_exp ~ murder + hs_grad + frost + log(population) + illiteracy + hs_grad * illiteracy, data = data)
+summary(fit.4)
 ```
 
 D. Use criterion-based procedures to guide your selection of the ‘best subset’. Summarize\
 your results (tabular or graphical).
 
 ```{r}
-fit.4 = MASS::stepAIC(fit.mult, trace = FALSE)
-summary(fit.4)
-broom::tidy(fit.4) |> knitr::kable()
+fit.5 = MASS::stepAIC(fit.mult, trace = FALSE)
+summary(fit.5)
+broom::tidy(fit.5) |> knitr::kable()
 ```
 
 E. Use the LASSO method to perform variable selection. Make sure you choose the “best\
@@ -193,7 +145,48 @@ best_lambda = cv_model$lambda.min
 
 # create best model with best lambda
 
-best_model = glmnet(x, y, alpha = 1, lambda = best_lambda)
-coef(best_model)
-
+fit.lasso = glmnet(x, y, alpha = 1, lambda = best_lambda)
+coef(fit.lasso)
 ```
+## F. Comparing subsets and final model.
+All of the methods (forward, backward, stepAIC, and LASSO) chose the same model with 4 predictors: `population`, `murder`, `hs_grad`, and `frost`. After a boxcox transformation we see that taking the inverse of life expectancy gives us better noramilty with the residuals. We
+
+```{r}
+par(mfrow = c(2, 2))
+# refit linear model with top parameters
+fit.best = lm(life_exp ~ log(population) + murder + hs_grad + 
+    frost, data = data)
+summary(fit.best)
+plot(fit.best)
+
+# do boxcox transformation to see if there is a better fit
+MASS::boxcox(fit.best, lambda = seq(-5, 5, by = 0.25))
+
+fit.best = lm(1/life_exp ~ log(population) + murder + hs_grad + 
+    frost, data = data)
+summary(fit.best)
+plot(fit.best)
+
+# check collinearity with values >5
+vif(fit.best)
+```
+
+Cross validation
+```{r}
+library(caret)
+set.seed(12345)
+# Use 10-fold validation and create the training sets
+  train = trainControl(method = "cv", number = 10)
+# Fit the 4-variables model that we discussed in previous lectures
+model_caret = train(1/life_exp ~ log(population) + murder + hs_grad + frost,
+                    data = data,
+                    trControl = train,
+                    method = 'lm',
+                    na.action = na.pass)
+model_caret$finalModel
+print(model_caret)
+```
+
+## G. Summary
+
+Using a dataset of 50 U.S. states, we developed a regression model to predict life expectancy in the 1970s. Variables like population, high school graduation, frost, and murder had linear relationships with life expectancy. The population variable showed a distribution that was not norma, but could be addressed by a log transformation. I built the model using forward and backward automatic procedures, as well as stepAIC criterion procdure and, finally LASSO. All models returned the same set of predictors, so that increased confidence in the finally model including log_population, high school graduation, murder and frost. Assessing the model with a boxcox transformation indicated than an inverse transformation of life expectancy gaves us more noramlly distributed residuals. The final model explains 75.43% of the total variance of the dataset. The cross-validation showed that the RMSE and MAE are low and showing that there is low predictive error. 
